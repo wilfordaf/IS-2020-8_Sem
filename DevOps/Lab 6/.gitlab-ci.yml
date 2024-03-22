@@ -1,0 +1,68 @@
+image: docker:latest
+
+services:
+  - docker:dind
+
+stages:
+  - build
+  - test
+  - deploy
+
+build:
+  stage: build
+  script:
+    - docker-compose down --remove-orphans
+    - docker-compose build
+
+test-backend:
+  image: yannoff/maven:3.8.5-openjdk-17-alpine
+  stage: test
+  tags:
+    - docker
+  services:
+    - name: mysql:5.7
+      alias: database
+  variables:
+    MYSQL_DATABASE: employee_management_system
+    MYSQL_ROOT_PASSWORD: root
+  script:
+    - mvn -f springboot-backend/pom.xml test
+
+test-frontend:
+  image: node:12-alpine
+  stage: test
+  tags:
+    - docker
+  before_script:
+    - cd react-frontend
+  script:
+    - npm install
+    - npm run test
+
+deploy:
+  stage: deploy
+  script:
+    - docker login -u gitlab-ci-token -p ${CI_BUILD_TOKEN} ${CI_REGISTRY}
+    - docker-compose build
+    - docker ps
+    - docker images
+    
+    # applying tags corresponding with commit hash to images
+    - docker tag react-frontend:latest ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-react-frontend:latest
+    - docker tag springboot-backend:latest ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-springboot-backend:latest
+    - docker tag nginx:latest ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-nginx:latest
+    
+    # pushing images
+    - docker push ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-react-frontend:latest
+    - docker push ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-springboot-backend:latest
+    - docker push ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-nginx:latest
+
+    # applying tags corresponding with commit hash to containers
+    - docker tag ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-react-frontend:latest ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-react-frontend:${CI_COMMIT_SHORT_SHA}
+    - docker tag ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-springboot-backend:latest ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-springboot-backend:${CI_COMMIT_SHORT_SHA}
+    - docker tag ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-nginx:latest ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-nginx:${CI_COMMIT_SHORT_SHA}
+    
+    # pushing containers
+    - docker push ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-react-frontend:${CI_COMMIT_SHORT_SHA}
+    - docker push ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-springboot-backend:${CI_COMMIT_SHORT_SHA}
+    - docker push ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}-nginx:${CI_COMMIT_SHORT_SHA}

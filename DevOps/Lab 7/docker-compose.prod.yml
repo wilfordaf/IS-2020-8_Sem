@@ -1,0 +1,46 @@
+version: '3'
+
+networks:
+  employee_management_network:
+    name: employee_management_network
+    driver: bridge
+
+services:
+  database:
+    image: mysql:5.7
+    container_name: database
+    restart: on-failure
+    privileged: true
+    environment:
+      - MYSQL_DATABASE=employee_management_system
+      - MYSQL_ROOT_PASSWORD=root
+    networks:
+      - employee_management_network
+
+  springboot-backend:
+    image: registry.gitlab.deuslearn.ru/devops-y24/wilfordaf-group/wilfordaf-lab-7/lab-7-springboot-backend
+    container_name: springboot-backend
+    restart: on-failure
+    depends_on:
+      - database
+    networks:
+      - employee_management_network
+    
+  react-frontend:
+    image: registry.gitlab.deuslearn.ru/devops-y24/wilfordaf-group/wilfordaf-lab-7/lab-7-react-frontend
+    container_name: react-frontend
+    restart: on-failure
+    networks:
+      - employee_management_network
+
+  nginx:
+    image: registry.gitlab.deuslearn.ru/devops-y24/wilfordaf-group/wilfordaf-lab-7/lab-7-nginx
+    container_name: nginx
+    restart: on-failure
+    ports:
+      - 3000:5000
+    depends_on:
+      - react-frontend
+      - springboot-backend
+    networks:
+      - employee_management_network
